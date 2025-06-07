@@ -32,6 +32,12 @@ float legAngle = 0.0f;
 bool walking = false;
 float walkTime = 0.0f;
 
+float npcWalkTime = 0.0f;
+float npcArmAngle = 0.0f;
+float npcLegAngle = 0.0f;
+
+float animSpeed = 10.0f;
+
 GLUquadric* quadric;
 
 void init() {
@@ -553,24 +559,16 @@ void processInput(GLFWwindow* window, float deltaTime) {
     if (gameOver) return;
 
     float speed = 25.0f;        // Kecepatan gerak (unit per detik)
-    float rotSpeed = 90.0f;    // Kecepatan rotasi (derajat per detik)
+    float rotSpeed = 90.0f;     // Kecepatan rotasi (derajat per detik)
 
-    // Rotasi kiri kanan (A/D)
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+    // Rotasi kamera dengan Arrow Left/Right
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
         rotAngleY += rotSpeed * deltaTime;  // Putar ke kiri
         if (rotAngleY >= 360.0f) rotAngleY -= 360.0f;
     }
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
         rotAngleY -= rotSpeed * deltaTime;  // Putar ke kanan
         if (rotAngleY < 0.0f) rotAngleY += 360.0f;
-    }
-    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS && !keyPressedE) {
-        keyPressedE = true;
-        pickupSupply(); // <- panggil ini
-    }
-    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
-        keyPressedE = false;
-        dropSupply();
     }
 
     // Gerak maju mundur (W/S)
@@ -578,37 +576,60 @@ void processInput(GLFWwindow* window, float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) forward += 1.0f;
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) forward -= 1.0f;
 
-    if (forward != 0.0f) {
-        float angleRad = rotAngleY * PI / 180.0f;
-        float deltaX = sin(angleRad) * forward * speed * deltaTime;
-        float deltaZ = cos(angleRad) * forward * speed * deltaTime;
+    // Gerak kiri/kanan (A/D)
+    float strafe = 0.0f;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) strafe -= 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) strafe += 1.0f;
+
+    // Hitung arah gerak
+    float angleRad = rotAngleY * PI / 180.0f;
+    float moveX = sin(angleRad) * forward + cos(angleRad) * strafe;
+    float moveZ = cos(angleRad) * forward - sin(angleRad) * strafe;
+
+    if (forward != 0.0f || strafe != 0.0f) {
+        // Normalisasi agar kecepatan diagonal tetap
+        float len = sqrt(moveX * moveX + moveZ * moveZ);
+        if (len > 0.0f) {
+            moveX /= len;
+            moveZ /= len;
+        }
+
+        float deltaX = moveX * speed * deltaTime;
+        float deltaZ = moveZ * speed * deltaTime;
 
         float newX = posXBadan + deltaX;
         float newZ = posZBadan + deltaZ;
 
         // Cek collision batas area terlebih dahulu
-    if (newX >= AREA_MIN_X && newX <= AREA_MAX_X &&
-        newZ >= AREA_MIN_Z && newZ <= AREA_MAX_Z) {
-        
-        // Cek collision dengan bangunan
-        bool collideX = checkBuildingCollision(newX, posZBadan);
-        bool collideZ = checkBuildingCollision(posXBadan, newZ);
-        bool collideBoth = checkBuildingCollision(newX, newZ);
+        if (newX >= AREA_MIN_X && newX <= AREA_MAX_X &&
+            newZ >= AREA_MIN_Z && newZ <= AREA_MAX_Z) {
 
-        // Sliding collision
-        if (!collideBoth) {
-            posXBadan = newX;
-            posZBadan = newZ;
-        } else if (!collideX && collideZ) {
-            posXBadan = newX;
-        } else if (collideX && !collideZ) {
-            posZBadan = newZ;
+            // Cek collision dengan bangunan
+            bool collideX = checkBuildingCollision(newX, posZBadan);
+            bool collideZ = checkBuildingCollision(posXBadan, newZ);
+            bool collideBoth = checkBuildingCollision(newX, newZ);
+
+            // Sliding collision
+            if (!collideBoth) {
+                posXBadan = newX;
+                posZBadan = newZ;
+            } else if (!collideX && collideZ) {
+                posXBadan = newX;
+            } else if (collideX && !collideZ) {
+                posZBadan = newZ;
+            }
+            // Jika collideX && collideZ: tidak bergerak (terhalang sepenuhnya)
         }
-        // Jika collideX && collideZ: tidak bergerak (terhalang sepenuhnya)
-
     }
 
-    
+    // Pickup/drop supply tetap
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS && !keyPressedE) {
+        keyPressedE = true;
+        pickupSupply();
+    }
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+        keyPressedE = false;
+        dropSupply();
     }
 }
 
@@ -706,28 +727,29 @@ void drawNpc() {
     float npcYaw = atan2(dx, dz) * 180.0f / M_PI;
     glRotatef(npcYaw, 0, 1, 0);
 
+        // Badan atas
     glPushMatrix();
     glTranslatef(0.0f, 0.5f, 0.0f);
-    glColor3f(0.0f, 0.0f, 1.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
-    glScalef(1.5f, 1.0f, 0.8f);
+    glScalef(0.75f, 0.4f, 0.4f);
     drawCube(1.0f);
     glPopMatrix();
 
     // Badan bawah
     glPushMatrix();
-    glTranslatef(0.0f, -0.8f, 0.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, -0.3f, 0.0f);
+    glColor3f(1.0f, 0.2f, 0.0f);
     glPushMatrix();
-    glScalef(1.3f, 0.8f, 0.5f);
+    glScalef(0.65f, 0.3f, 0.25f);
     drawCube(1.0f);
     glPopMatrix();
     glPopMatrix();
 
     // Kepala
     glPushMatrix();
-    glTranslatef(0.0f, 1.3f, 0.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
+    glTranslatef(0.0f, 1.1f, 0.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
     GLUquadric* quad = gluNewQuadric();
     gluSphere(quad, 0.4f, 20, 20);
     gluDeleteQuadric(quad);
@@ -735,7 +757,7 @@ void drawNpc() {
 
     // Antena Kiri
     glPushMatrix();
-    glTranslatef(-0.3f, 1.8f, 0.3f);
+    glTranslatef(-0.3f, 1.6f, 0.3f);
     glRotatef(45, 0, 0, 1);
     glColor3f(1.0f, 1.0f, 0.0f);
     glPushMatrix();
@@ -746,7 +768,7 @@ void drawNpc() {
 
     // Antena Kanan
     glPushMatrix();
-    glTranslatef(0.3f, 1.8f, 0.3f);
+    glTranslatef(0.3f, 1.6f, 0.3f);
     glRotatef(-45, 0, 0, 1);
     glColor3f(1.0f, 1.0f, 0.0f);
     glPushMatrix();
@@ -757,7 +779,7 @@ void drawNpc() {
 
     // Kotak Merah di Antara Antena
     glPushMatrix();
-    glTranslatef(0.0f, 1.6f, 0.3f);
+    glTranslatef(0.0f, 1.4f, 0.3f);
     glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
     glScalef(0.2f, 0.2f, 0.2f);
@@ -765,153 +787,99 @@ void drawNpc() {
     glPopMatrix();
     glPopMatrix();
 
-    // Lengan Kiri
+    // Lengan Kiri (pivot di bahu)
     glPushMatrix();
-    glTranslatef(-1.0f, 0.3f, 0.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
+    glTranslatef(-0.5f, 0.7f, 0.0f);      // ke posisi bahu
+    glRotatef(npcArmAngle, 1, 0, 0);         // rotasi di bahu
+    glTranslatef(0.0f, -0.375f, 0.0f);    // ke tengah lengan
+    glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
-    glScalef(0.4f, 1.5f, 0.4f);
+    glScalef(0.25f, 0.75f, 0.25f);
     drawCube(1.0f);
     glPopMatrix();
-    glPopMatrix();
 
-    // Lengan Kanan
+    // Tangan Kiri (sphere di ujung bawah lengan)
     glPushMatrix();
-    glTranslatef(1.0f, 0.3f, 0.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-    glPushMatrix();
-    glScalef(0.4f, 1.5f, 0.4f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Tangan Kiri
-    glPushMatrix();
-    glTranslatef(-1.0f, -0.6f, 0.0f);
+    glTranslatef(0.0f, -0.375f, 0.0f); // ke ujung bawah lengan
     glColor3f(0.5f, 0.5f, 0.5f);
     GLUquadric* handLeft = gluNewQuadric();
-    gluSphere(handLeft, 0.25f, 16, 16);
+    gluSphere(handLeft, 0.15f, 16, 16);
     gluDeleteQuadric(handLeft);
     glPopMatrix();
 
-    // Tangan Kanan
+    glPopMatrix();
+
+    // Lengan Kanan (pivot di bahu)
     glPushMatrix();
-    glTranslatef(1.0f, -0.6f, 0.0f);
+    glTranslatef(0.5f, 0.7f, 0.0f);
+    glRotatef(-npcArmAngle, 1, 0, 0);
+    glTranslatef(0.0f, -0.375f, 0.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Tangan Kanan (sphere di ujung bawah lengan)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.375f, 0.0f);
     glColor3f(0.5f, 0.5f, 0.5f);
     GLUquadric* handRight = gluNewQuadric();
-    gluSphere(handRight, 0.25f, 16, 16);
+    gluSphere(handRight, 0.15f, 16, 16);
     gluDeleteQuadric(handRight);
     glPopMatrix();
 
-    // Shield
-    glPushMatrix();
-    glTranslatef(1.3f, 0.2f, 0.0f);
-    glScalef(0.5f, 3.5f, 1.5f);
-    glColor3f(1.0f, 0.0f, 0.0f);
-    const float depth = 0.1f;
-    const float radius = 0.5f;
-
-    glBegin(GL_POLYGON);
-    for (int i = 0; i < 6; i++) {
-        float angle = i * M_PI / 3.0f + M_PI / 6.0f;
-        glVertex3f(depth, radius * cos(angle), radius * sin(angle));
-    }
-    glEnd();
-
-    glBegin(GL_POLYGON);
-    for (int i = 0; i < 6; i++) {
-        float angle = i * M_PI / 3.0f + M_PI / 6.0f;
-        glVertex3f(-depth, radius * cos(angle), radius * sin(angle));
-    }
-    glEnd();
-
-    glBegin(GL_QUADS);
-    for (int i = 0; i < 6; i++) {
-        float angle1 = i * M_PI / 3.0f + M_PI / 6.0f;
-        float angle2 = (i + 1) * M_PI / 3.0f + M_PI / 6.0f;
-
-        float y1 = radius * cos(angle1);
-        float z1 = radius * sin(angle1);
-        float y2 = radius * cos(angle2);
-        float z2 = radius * sin(angle2);
-
-        glVertex3f(depth, y1, z1);
-        glVertex3f(depth, y2, z2);
-        glVertex3f(-depth, y2, z2);
-        glVertex3f(-depth, y1, z1);
-    }
-    glEnd();
-
-    // Ornamen
-    glPushMatrix();
-    glTranslatef(0.15f, -0.05f, 0.0f); 
-    glColor3f(1.0f, 1.0f, 0.0f);
-    glScalef(0.1f, 0.6f, 0.1f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Beam Saber
-    glPushMatrix();
-    glTranslatef(-1.0f, -0.6f, 0.0f);
-    glRotatef(0, 0, 1, 0);
-
-    // Beam
-    glColor3f(3.0f, 0.0f, 1.0f);
-    GLUquadric* saber = gluNewQuadric();
-    gluCylinder(saber, 0.09, 0.09, 2.5, 16, 16);
-
-    // Handle
-    glTranslatef(0.0f, 0.0f, -0.25f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-    gluCylinder(saber, 0.1, 0.1, 0.7, 16, 16);
-    gluDeleteQuadric(saber);
     glPopMatrix();
 
     // Pinggang
     glPushMatrix();
-    glTranslatef(0.0f, -0.9f, 0.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-    glPushMatrix();
-    glScalef(1.5f, 0.4f, 0.6f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Kaki Kiri
-    glPushMatrix();
-    glTranslatef(-0.5f, -1.8f, 0.0f);
-    glColor3f(1.0f, 1.0f, 1.0f);
-    glPushMatrix();
-    glScalef(0.5f, 1.5f, 0.5f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Kaki Kanan
-    glPushMatrix();
-    glTranslatef(0.5f, -1.8f, 0.0f);
-    glPushMatrix();
-    glScalef(0.5f, 1.5f, 0.5f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Telapak Kiri
-    glPushMatrix();
-    glTranslatef(-0.5f, -2.7f, 0.2f);
+    glTranslatef(0.0f, 0.0f, 0.0f);
     glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
-    glScalef(0.7f, 0.3f, 1.4f);
+    glScalef(0.75f, 0.2f, 0.3f);
     drawCube(1.0f);
     glPopMatrix();
     glPopMatrix();
 
-    // Telapak Kanan
+    // Kaki Kiri (pivot di pinggang)
     glPushMatrix();
-    glTranslatef(0.5f, -2.7f, 0.2f);
+    glTranslatef(-0.25f, -0.225f, 0.0f);    // ke posisi pangkal kaki kiri
+    glRotatef(npcLegAngle, 1, 0, 0);          // rotasi kaki kiri di pangkal
+    glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kiri
+    glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
-    glScalef(0.7f, 0.3f, 1.4f);
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Telapak Kiri (ikut kaki)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kiri, lalu sedikit ke depan
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.35f, 0.15f, 0.7f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+
+    // Kaki Kanan (pivot di pinggang)
+    glPushMatrix();
+    glTranslatef(0.25f, -0.225f, 0.0f);     // ke posisi pangkal kaki kanan
+    glRotatef(-npcLegAngle, 1, 0, 0);         // rotasi kaki kanan di pangkal
+    glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kanan
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Telapak Kanan (ikut kaki)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kanan, lalu sedikit ke depan
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.35f, 0.15f, 0.7f);
     drawCube(1.0f);
     glPopMatrix();
     glPopMatrix();
@@ -1059,9 +1027,14 @@ int main() {
         drawBuildings();
         drawSupply();
         
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+        if (
+            glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS ||
+            glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS ||
+            glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS ||
+            glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS
+        ) {
             walking = true;
-            walkTime += 0.02f; // kecepatan animasi
+            walkTime += deltaTime * animSpeed; // kecepatan animasi
         } else {
             walking = false;
             walkTime = 0.0f;
@@ -1075,8 +1048,12 @@ int main() {
         }
 
         drawPlayer();
+
+        npcWalkTime += deltaTime * animSpeed; // kecepatan animasi NPC
+        npcArmAngle = 30.0f * sin(npcWalkTime);
+        npcLegAngle = 30.0f * -sin(npcWalkTime);
         drawNpc();
-          // Gambar supply yang ada
+
         renderGameOver();  // Menampilkan teks Game Over jika gameOver == true
 
         glfwSwapBuffers(window);
@@ -1087,4 +1064,3 @@ int main() {
     glfwTerminate();
     return 0;
 }
-
