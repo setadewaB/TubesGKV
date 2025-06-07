@@ -51,6 +51,9 @@ void init() {
     glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
     glLightfv(GL_LIGHT0, GL_AMBIENT, lightAmbient);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, lightDiffuse);
+
+    glEnable(GL_COLOR_MATERIAL);
+    glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE);
 }
 
 void reshape(GLFWwindow* window, int width, int height) {
@@ -309,7 +312,7 @@ void drawPlayer() {
     // Badan atas
     glPushMatrix();
     glTranslatef(0.0f, 0.5f, 0.0f);
-    glColor3f(0.0f, 0.0f, 1.0f);
+    glColor3f(0.0f, 0.2f, 1.0f);
     glPushMatrix();
     glScalef(0.75f, 0.4f, 0.4f);
     drawCube(1.0f);
@@ -318,7 +321,7 @@ void drawPlayer() {
     // Badan bawah
     glPushMatrix();
     glTranslatef(0.0f, -0.3f, 0.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(1.0f, 0.2f, 0.0f);
     glPushMatrix();
     glScalef(0.65f, 0.3f, 0.25f);
     drawCube(1.0f);
@@ -502,7 +505,7 @@ void renderSky() {
     glBindTexture(GL_TEXTURE_2D, skyTexture);
 
     // Sphere besar, radius besar agar menutupi seluruh scene
-    float radius = 50.0f;
+    float radius = 60.0f;
 
     // Saat render sphere untuk langit, biasanya kita balik normal dan inside-out biar texture tampil benar dari dalam sphere.
     // gluQuadricOrientation = GLU_INSIDE untuk normal mengarah ke dalam sphere
@@ -521,7 +524,7 @@ void renderSky() {
 
 
 void updateCamera() {
-    float camDistance = 15.0f;   // Jarak kamera dari pemain
+    float camDistance = 10.0f;   // Jarak kamera dari pemain
     float camHeight = 5.0f;      // Kalau kamu ingin, bisa pakai untuk offset vertikal tambahan
     float pitchAngle = -10.0f;    // Pitch dalam derajat (positif = lihat ke bawah)
 
@@ -633,7 +636,9 @@ void renderGround() {
 //NPC
 float npcX = 20.0f, npcY = 2.0f, npcZ = 20.0f;  // Posisi awal NPC
 float npcSpeed = 5.0f;  // Kecepatan pergerakan NPC
-
+float dx = posXBadan - npcX;
+float dz = posZBadan - npcZ;
+float npcYaw = atan2(dx, dz) * 180.0f / M_PI;
 float collisionDistance = 1.5f;  // Jarak ketika NPC menyentuh pemain (dalam unit)
 
 
@@ -695,6 +700,11 @@ void drawNpc() {
     glPushMatrix();
     glTranslatef(npcX, npcY, npcZ);  // Posisi NPC
     glColor3f(1.0f, 0.0f, 0.0f);    // Warna merah
+
+    float dx = posXBadan - npcX;
+    float dz = posZBadan - npcZ;
+    float npcYaw = atan2(dx, dz) * 180.0f / M_PI;
+    glRotatef(npcYaw, 0, 1, 0);
 
     glPushMatrix();
     glTranslatef(0.0f, 0.5f, 0.0f);
