@@ -288,22 +288,30 @@ bool firstSupplySpawned = false;
 bool keyPressedE = false;
 
 void drawSupply() {
+    // Gambar semua supply yang masih aktif di dunia
     for (const auto& s : supplies) {
         if (s.active) {
             glColor3f(0.2f, 0.6f, 0.8f);
             glPushMatrix();
-            glTranslatef(s.x, s.y, s.z);  // Tambahkan ini untuk memindahkan ke posisi supply
-            glScalef(1.5f, 2.5f, 1.0f);
+            glTranslatef(s.x, s.y, s.z);
+            glScalef(1.5f, 0.5f, 1.0f);
             drawCube(1.0f);
             glPopMatrix();
         }
     }
 
+    // Jika sedang membawa supply, gambar supply di atas kepala
     if (carryingSupply) {
         glPushMatrix();
-        glTranslatef(posXBadan, 1.5f, posZBadan);
-        glColor3f(1.0f, 1.0f, 0.0f);
-        drawCube(0.3f);
+        // Pusatkan ke posisi player
+        glTranslatef(posXBadan, posYBadan, posZBadan);
+        // Rotasi sesuai arah player
+        glRotatef(rotAngleY, 0, 1, 0);
+        // Pindahkan ke atas kepala (relatif terhadap badan)
+        glTranslatef(0.0f, 1.7f, 0.0f);
+        glColor3f(0.2f, 0.6f, 0.8f);
+        glScalef(1.5f, 0.5f, 1.0f);
+        drawCube(1.0f);
         glPopMatrix();
     }
 }
@@ -439,7 +447,11 @@ void drawPlayer() {
     // Lengan Kiri (pivot di bahu)
     glPushMatrix();
     glTranslatef(-0.5f, 0.7f, 0.0f);      // ke posisi bahu
-    glRotatef(armAngle, 1, 0, 0);         // rotasi di bahu
+    if (carryingSupply) {
+        glRotatef(-180.0f, 1, 0, 0); // ke atas (sumbu X negatif)
+    } else {
+        glRotatef(armAngle, 1, 0, 0); // animasi jalan
+    }
     glTranslatef(0.0f, -0.375f, 0.0f);    // ke tengah lengan
     glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
@@ -461,7 +473,11 @@ void drawPlayer() {
     // Lengan Kanan (pivot di bahu)
     glPushMatrix();
     glTranslatef(0.5f, 0.7f, 0.0f);
-    glRotatef(-armAngle, 1, 0, 0);
+    if (carryingSupply) {
+        glRotatef(-180.0f, 1, 0, 0); // ke atas juga
+    } else {
+        glRotatef(-armAngle, 1, 0, 0);
+    }
     glTranslatef(0.0f, -0.375f, 0.0f);
     glColor3f(1.0f, 1.0f, 1.0f);
     glPushMatrix();
@@ -985,6 +1001,50 @@ const unsigned char font[96][5] = {
     // Add characters for digits, punctuation, etc.
 };
 
+// Font angka 8x8 (vertikal, tiap baris = 1 byte, 0 = kosong, 1 = isi)
+const unsigned char digitFont[10][8] = {
+    {0x3C,0x66,0x6E,0x76,0x66,0x66,0x3C,0x00}, // 0
+    {0x18,0x38,0x18,0x18,0x18,0x18,0x7E,0x00}, // 1
+    {0x3C,0x66,0x06,0x0C,0x18,0x30,0x7E,0x00}, // 2
+    {0x3C,0x66,0x06,0x1C,0x06,0x66,0x3C,0x00}, // 3
+    {0x0C,0x1C,0x3C,0x6C,0x7E,0x0C,0x0C,0x00}, // 4
+    {0x7E,0x60,0x7C,0x06,0x06,0x66,0x3C,0x00}, // 5
+    {0x1C,0x30,0x60,0x7C,0x66,0x66,0x3C,0x00}, // 6
+    {0x7E,0x06,0x0C,0x18,0x30,0x30,0x30,0x00}, // 7
+    {0x3C,0x66,0x66,0x3C,0x66,0x66,0x3C,0x00}, // 8
+    {0x3C,0x66,0x66,0x3E,0x06,0x0C,0x38,0x00}  // 9
+};
+
+// Fungsi untuk menampilkan angka besar vertikal (hanya angka)
+void drawBigNumber(float x, float y, const std::string& num, float scale = 6.0f) {
+    // Hapus glDisable(GL_LIGHTING); dan glEnable(GL_LIGHTING); dari sini!
+    float charWidth = 8 * scale;
+    float charHeight = 8 * scale;
+    glPushMatrix();
+    glTranslatef(x, y, 0);
+    glDisable(GL_TEXTURE_2D);
+    for (size_t i = 0; i < num.length(); i++) {
+        char c = num[i];
+        if (c >= '0' && c <= '9') {
+            const unsigned char* bitmap = digitFont[c - '0'];
+            for (int row = 0; row < 8; ++row) {
+                unsigned char bits = bitmap[row];
+                for (int col = 0; col < 8; ++col) {
+                    if (bits & (1 << (7 - col))) {
+                        glBegin(GL_QUADS);
+                        glVertex2f(i * charWidth + col * scale, -row * scale);
+                        glVertex2f(i * charWidth + (col + 1) * scale, -row * scale);
+                        glVertex2f(i * charWidth + (col + 1) * scale, -(row + 1) * scale);
+                        glVertex2f(i * charWidth + col * scale, -(row + 1) * scale);
+                        glEnd();
+                    }
+                }
+            }
+        }
+    }
+    glEnable(GL_TEXTURE_2D);
+    glPopMatrix();
+}
 
 
 void drawText(float x, float y, const std::string& text) {
@@ -1085,7 +1145,6 @@ int main() {
         }
         renderSky();     
         renderGround();
-        
         drawBuildings();
         drawSupply();
         
@@ -1109,8 +1168,10 @@ int main() {
             legAngle = 0.0f;
         }
 
-        drawZone();
-
+        drawZone();  
+        drawPlayer();
+        drawNpc();
+        
         // Tampilkan skor
         glMatrixMode(GL_PROJECTION);
         glPushMatrix();
@@ -1119,19 +1180,18 @@ int main() {
         glMatrixMode(GL_MODELVIEW);
         glPushMatrix();
         glLoadIdentity();
+        glDisable(GL_LIGHTING); // Matikan lighting sebelum skor
         glColor3f(1,1,0);
-        drawText(-0.95f, 0.9f, "Score: " + std::to_string(score));
+        drawBigNumber(20, HEIGHT - 40, std::to_string(score), 8.0f);
+        glEnable(GL_LIGHTING);  // Aktifkan kembali lighting setelah skor
         glPopMatrix();
         glMatrixMode(GL_PROJECTION);
         glPopMatrix();
         glMatrixMode(GL_MODELVIEW);
-
-        drawPlayer();
-
         npcWalkTime += deltaTime * animSpeed; // kecepatan animasi NPC
         npcArmAngle = 30.0f * sin(npcWalkTime);
         npcLegAngle = 30.0f * -sin(npcWalkTime);
-        drawNpc();
+        
 
         renderGameOver();  // Menampilkan teks Game Over jika gameOver == true
 
