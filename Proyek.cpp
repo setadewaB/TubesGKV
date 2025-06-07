@@ -17,6 +17,7 @@ const float AREA_MIN_Z = -100.0f;
 const float AREA_MAX_Z =  100.0f;
 GLuint groundTexture;
 GLuint skyTexture;
+GLuint buildingTexture;
 
 
 
@@ -34,6 +35,7 @@ void init() {
     quadric = gluNewQuadric();
     gluQuadricNormals(quadric, GLU_SMOOTH);
     gluQuadricTexture(quadric, GL_TRUE);
+    
 
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -128,59 +130,60 @@ void generateBuildings(int count) {
     }
 }
 
-void drawBuilding(const Building& b) {
+void drawBuilding(const Building& b, GLuint buildingTexture) {
     float halfW = b.width / 2.0f;
     float halfD = b.depth / 2.0f;
 
     glPushMatrix();
+    glColor3f(1.0f, 1.0f, 1.0f);
     glTranslatef(b.x, 0.0f, b.z);
 
-    glColor3f(0.7f, 0.7f, 0.7f);  // warna gedung
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, buildingTexture);
 
     glBegin(GL_QUADS);
-    // gambar sisi bawah (lantai)
-    glVertex3f(-halfW, 0, -halfD);
-    glVertex3f( halfW, 0, -halfD);
-    glVertex3f( halfW, 0,  halfD);
-    glVertex3f(-halfW, 0,  halfD);
 
-    // gambar atap
-    glVertex3f(-halfW, b.height, -halfD);
-    glVertex3f( halfW, b.height, -halfD);
-    glVertex3f( halfW, b.height,  halfD);
-    glVertex3f(-halfW, b.height,  halfD);
+    // sisi bawah (lantai)
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-halfW, 0, -halfD);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( halfW, 0, -halfD);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( halfW, 0,  halfD);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-halfW, 0,  halfD);
 
     // sisi depan
-    glVertex3f(-halfW, 0, halfD);
-    glVertex3f( halfW, 0, halfD);
-    glVertex3f( halfW, b.height, halfD);
-    glVertex3f(-halfW, b.height, halfD);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-halfW, 0, halfD);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( halfW, 0, halfD);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( halfW, b.height, halfD);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-halfW, b.height, halfD);
 
     // sisi belakang
-    glVertex3f(-halfW, 0, -halfD);
-    glVertex3f( halfW, 0, -halfD);
-    glVertex3f( halfW, b.height, -halfD);
-    glVertex3f(-halfW, b.height, -halfD);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-halfW, 0, -halfD);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( halfW, 0, -halfD);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( halfW, b.height, -halfD);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-halfW, b.height, -halfD);
 
     // sisi kiri
-    glVertex3f(-halfW, 0, -halfD);
-    glVertex3f(-halfW, 0, halfD);
-    glVertex3f(-halfW, b.height, halfD);
-    glVertex3f(-halfW, b.height, -halfD);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-halfW, 0, -halfD);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-halfW, 0, halfD);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-halfW, b.height, halfD);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-halfW, b.height, -halfD);
 
     // sisi kanan
-    glVertex3f(halfW, 0, -halfD);
-    glVertex3f(halfW, 0, halfD);
-    glVertex3f(halfW, b.height, halfD);
-    glVertex3f(halfW, b.height, -halfD);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(halfW, 0, -halfD);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(halfW, 0, halfD);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(halfW, b.height, halfD);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(halfW, b.height, -halfD);
+
     glEnd();
+
+
+    glDisable(GL_TEXTURE_2D);
 
     glPopMatrix();
 }
 
 void drawBuildings() {
     for (const auto& b : buildings) {
-        drawBuilding(b);
+        drawBuilding(b, buildingTexture);
     }
 }
 
@@ -340,7 +343,7 @@ GLuint loadTexture(const char* filename) {
 
 void renderSky() {
     glPushMatrix();
-
+    glColor3f(1.0f, 1.0f, 1.0f);
     // Posisi langit di posisi kamera agar tidak terlihat bergeser
     // Dapatkan posisi kamera (posXBadan, posYBadan, posZBadan) sebagai pusat langit
     glTranslatef(posXBadan, posYBadan, posZBadan);
@@ -456,10 +459,6 @@ void processInput(GLFWwindow* window, float deltaTime) {
     
     }
 }
-
-
-
-
 
 
 void renderGround() {
@@ -652,7 +651,7 @@ int main() {
 
     // Load texture (jika ada file .jpg atau .png untuk ground)
     int texWidth, texHeight, texChannels;
-    unsigned char* image = stbi_load("grasscomp.png", &texWidth, &texHeight, &texChannels, 0);
+    unsigned char* image = stbi_load("textures/dirt2.png", &texWidth, &texHeight, &texChannels, 0);
     if (image) {
         glGenTextures(1, &groundTexture);
         glBindTexture(GL_TEXTURE_2D, groundTexture);
@@ -665,8 +664,8 @@ int main() {
         std::exit(EXIT_FAILURE);
     }
 
-    skyTexture = loadTexture("sky2.png");  // Pastikan ada file sky.jpg
-
+    skyTexture = loadTexture("textures/sky3.png");  // Pastikan ada file sky.jpg
+    buildingTexture = loadTexture("textures/buildingtext.png");
 
     glfwSetFramebufferSizeCallback(window, reshape);
     reshape(window, WIDTH, HEIGHT);  // Set viewport awal
