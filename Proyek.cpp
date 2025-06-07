@@ -3,21 +3,23 @@
 #include <GLFW/glfw3.h>
 #include <GL/glu.h>
 #include <string>  // Untuk std::string
+#include <iostream>  // Untuk std::cerr
+#include <cstdlib>  // Untuk std::exit
+#include <vector>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #define PI 3.14159265358979323846f
 const float AREA_MIN_X = -100.0f;
 const float AREA_MAX_X =  100.0f;
 const float AREA_MIN_Z = -100.0f;
 const float AREA_MAX_Z =  100.0f;
+GLuint groundTexture;
+GLuint skyTexture;
 
-enum GameState {
-    MAIN_MENU,
-    GAMEPLAY,
-    GAME_OVER
-};
 
-GameState gameState = MAIN_MENU;  // Inisialisasi dengan menu utama
+
 bool gameOver = false;  // Status game over
 
 float posXBadan = 0.0f, posYBadan = 0.0f, posZBadan = 0.0f;
@@ -95,6 +97,96 @@ void drawCube(float size) {
     glEnd();
 }
 
+
+struct Building {
+    float x, z;      // posisi pusat gedung di bidang XZ
+    float width;     // lebar gedung (sumbu X)
+    float depth;     // kedalaman gedung (sumbu Z)
+    float height;    // tinggi gedung (bisa untuk rendering)
+    
+};
+
+std::vector<Building> buildings;
+
+float randomFloat(float min, float max) {
+    return min + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (max - min)));
+}
+
+void generateBuildings(int count) {
+    buildings.clear();
+    srand(static_cast<unsigned int>(time(nullptr)));  // seed random
+
+    for (int i = 0; i < count; i++) {
+        Building b;
+        b.x = randomFloat(AREA_MIN_X, AREA_MAX_X);
+        b.z = randomFloat(AREA_MIN_Z, AREA_MAX_Z);
+        b.width = randomFloat(5.0f, 15.0f);   
+        b.depth = randomFloat(5.0f, 15.0f);
+        b.height = randomFloat(10.0f, 50.0f);
+
+        buildings.push_back(b);
+    }
+}
+
+void drawBuilding(const Building& b) {
+    float halfW = b.width / 2.0f;
+    float halfD = b.depth / 2.0f;
+
+    glPushMatrix();
+    glTranslatef(b.x, 0.0f, b.z);
+
+    glColor3f(0.7f, 0.7f, 0.7f);  // warna gedung
+
+    glBegin(GL_QUADS);
+    // gambar sisi bawah (lantai)
+    glVertex3f(-halfW, 0, -halfD);
+    glVertex3f( halfW, 0, -halfD);
+    glVertex3f( halfW, 0,  halfD);
+    glVertex3f(-halfW, 0,  halfD);
+
+    // gambar atap
+    glVertex3f(-halfW, b.height, -halfD);
+    glVertex3f( halfW, b.height, -halfD);
+    glVertex3f( halfW, b.height,  halfD);
+    glVertex3f(-halfW, b.height,  halfD);
+
+    // sisi depan
+    glVertex3f(-halfW, 0, halfD);
+    glVertex3f( halfW, 0, halfD);
+    glVertex3f( halfW, b.height, halfD);
+    glVertex3f(-halfW, b.height, halfD);
+
+    // sisi belakang
+    glVertex3f(-halfW, 0, -halfD);
+    glVertex3f( halfW, 0, -halfD);
+    glVertex3f( halfW, b.height, -halfD);
+    glVertex3f(-halfW, b.height, -halfD);
+
+    // sisi kiri
+    glVertex3f(-halfW, 0, -halfD);
+    glVertex3f(-halfW, 0, halfD);
+    glVertex3f(-halfW, b.height, halfD);
+    glVertex3f(-halfW, b.height, -halfD);
+
+    // sisi kanan
+    glVertex3f(halfW, 0, -halfD);
+    glVertex3f(halfW, 0, halfD);
+    glVertex3f(halfW, b.height, halfD);
+    glVertex3f(halfW, b.height, -halfD);
+    glEnd();
+
+    glPopMatrix();
+}
+
+void drawBuildings() {
+    for (const auto& b : buildings) {
+        drawBuilding(b);
+    }
+}
+
+
+
+
 void drawPlayer() {
     glPushMatrix();
     glTranslatef(posXBadan, posYBadan, posZBadan);
@@ -116,6 +208,60 @@ void drawPlayer() {
 
     glPopMatrix();
 }
+
+GLuint loadTexture(const char* filename) {
+    int width, height, channels;
+    unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+    if (!data) {
+        std::cerr << "Failed to load texture: " << filename << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
+
+    return textureID;
+}
+
+void renderSky() {
+    glPushMatrix();
+
+    // Posisi langit di posisi kamera agar tidak terlihat bergeser
+    // Dapatkan posisi kamera (posXBadan, posYBadan, posZBadan) sebagai pusat langit
+    glTranslatef(posXBadan, posYBadan, posZBadan);
+
+    glDisable(GL_LIGHTING);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, skyTexture);
+
+    // Sphere besar, radius besar agar menutupi seluruh scene
+    float radius = 50.0f;
+
+    // Saat render sphere untuk langit, biasanya kita balik normal dan inside-out biar texture tampil benar dari dalam sphere.
+    // gluQuadricOrientation = GLU_INSIDE untuk normal mengarah ke dalam sphere
+    gluQuadricOrientation(quadric, GLU_INSIDE);
+
+    gluSphere(quadric, radius, 40, 40);
+
+    // Kembalikan ke luar sphere untuk objek lain
+    gluQuadricOrientation(quadric, GLU_OUTSIDE);
+
+    glDisable(GL_TEXTURE_2D);
+    glEnable(GL_LIGHTING);
+
+    glPopMatrix();
+}
+
 
 void updateCamera() {
     float camDistance = 10.0f;   // Jarak kamera dari pemain
@@ -142,94 +288,101 @@ void updateCamera() {
               0, 1, 0);
 }
 
+bool checkBuildingCollision(float newX, float newZ) {
+    float playerSize = 0.5f; // radius collision pemain
+
+    for (const auto& b : buildings) {
+        float minX = b.x - b.width / 2.0f - playerSize;
+        float maxX = b.x + b.width / 2.0f + playerSize;
+        float minZ = b.z - b.depth / 2.0f - playerSize;
+        float maxZ = b.z + b.depth / 2.0f + playerSize;
+
+        if (newX >= minX && newX <= maxX &&
+            newZ >= minZ && newZ <= maxZ) {
+            return true;
+        }
+    }
+    return false;
+}
 
 void processInput(GLFWwindow* window, float deltaTime) {
-     if (gameState == MAIN_MENU) {
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-            // Memulai permainan
-            gameState = GAMEPLAY;
-        }
-        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
-            // Keluar dari game
-            glfwSetWindowShouldClose(window, GL_TRUE);
-        }
-    } else if (gameState == GAME_OVER) {
-        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
-            // Restart game
-            gameState = GAMEPLAY;
-            gameOver = false;
-        }
-    } else {
-        float speed = 25.0f;        // Kecepatan gerak (unit per detik)
-        float rotSpeed = 90.0f;    // Kecepatan rotasi (derajat per detik)
+    if (gameOver) return;
 
-        // Rotasi kiri kanan (A/D)
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-            rotAngleY += rotSpeed * deltaTime;  // Putar ke kiri
-            if (rotAngleY >= 360.0f) rotAngleY -= 360.0f;
+    float speed = 25.0f;        // Kecepatan gerak (unit per detik)
+    float rotSpeed = 90.0f;    // Kecepatan rotasi (derajat per detik)
+
+    // Rotasi kiri kanan (A/D)
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        rotAngleY += rotSpeed * deltaTime;  // Putar ke kiri
+        if (rotAngleY >= 360.0f) rotAngleY -= 360.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        rotAngleY -= rotSpeed * deltaTime;  // Putar ke kanan
+        if (rotAngleY < 0.0f) rotAngleY += 360.0f;
+    }
+
+    // Gerak maju mundur (W/S)
+    float forward = 0.0f;
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) forward += 1.0f;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) forward -= 1.0f;
+
+    if (forward != 0.0f) {
+        float angleRad = rotAngleY * PI / 180.0f;
+        float deltaX = sin(angleRad) * forward * speed * deltaTime;
+        float deltaZ = cos(angleRad) * forward * speed * deltaTime;
+
+        float newX = posXBadan + deltaX;
+        float newZ = posZBadan + deltaZ;
+
+        // Cek collision batas area terlebih dahulu
+    if (newX >= AREA_MIN_X && newX <= AREA_MAX_X &&
+        newZ >= AREA_MIN_Z && newZ <= AREA_MAX_Z) {
+        
+        // Cek collision dengan bangunan
+        bool collideX = checkBuildingCollision(newX, posZBadan);
+        bool collideZ = checkBuildingCollision(posXBadan, newZ);
+        bool collideBoth = checkBuildingCollision(newX, newZ);
+
+        // Sliding collision
+        if (!collideBoth) {
+            posXBadan = newX;
+            posZBadan = newZ;
+        } else if (!collideX && collideZ) {
+            posXBadan = newX;
+        } else if (collideX && !collideZ) {
+            posZBadan = newZ;
         }
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-            rotAngleY -= rotSpeed * deltaTime;  // Putar ke kanan
-            if (rotAngleY < 0.0f) rotAngleY += 360.0f;
-        }
-
-        // Gerak maju mundur (W/S)
-        float forward = 0.0f;
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) forward += 1.0f;
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) forward -= 1.0f;
-
-        if (forward != 0.0f) {
-            float angleRad = rotAngleY * PI / 180.0f;
-            float deltaX = sin(angleRad) * forward * speed * deltaTime;
-            float deltaZ = cos(angleRad) * forward * speed * deltaTime;
-
-            float newX = posXBadan + deltaX;
-            float newZ = posZBadan + deltaZ;
-
-            // Cek collision batas area
-            if (newX >= AREA_MIN_X && newX <= AREA_MAX_X) posXBadan = newX;
-            if (newZ >= AREA_MIN_Z && newZ <= AREA_MAX_Z) posZBadan = newZ;
-        }
+        // Jika collideX && collideZ: tidak bergerak (terhalang sepenuhnya)
 
     }
 
     
+    }
 }
+
 
 
 
 
 
 void renderGround() {
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, groundTexture);
     glDisable(GL_LIGHTING);
-    glColor3f(0.0f, 1.0f, 0.0f);  // Hijau
 
-    // Gambar permukaan datar (ground)
+    glColor3f(1.0f, 1.0f, 1.0f); // warna putih agar tekstur tidak dipengaruhi
+
     glBegin(GL_QUADS);
-    glVertex3f(AREA_MIN_X, 0.0f, AREA_MIN_Z);
-    glVertex3f(AREA_MAX_X, 0.0f, AREA_MIN_Z);
-    glVertex3f(AREA_MAX_X, 0.0f, AREA_MAX_Z);
-    glVertex3f(AREA_MIN_X, 0.0f, AREA_MAX_Z);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(AREA_MIN_X, 0.0f, AREA_MIN_Z);
+    glTexCoord2f(10.0f, 0.0f); glVertex3f(AREA_MAX_X, 0.0f, AREA_MIN_Z);
+    glTexCoord2f(10.0f, 10.0f); glVertex3f(AREA_MAX_X, 0.0f, AREA_MAX_Z);
+    glTexCoord2f(0.0f, 10.0f); glVertex3f(AREA_MIN_X, 0.0f, AREA_MAX_Z);
     glEnd();
 
     glEnable(GL_LIGHTING);
+    glDisable(GL_TEXTURE_2D);
 }
 
-
-//MAIN MENU
-void renderMainMenu() {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // Membersihkan layar
-
-    glDisable(GL_DEPTH_TEST);  // Nonaktifkan depth test untuk 2D
-
-    glColor3f(1.0f, 1.0f, 1.0f);  // Warna putih untuk teks
-    drawText(-0.3f, 0.3f, "Main Menu", 0.1f);  // Judul menu
-
-    drawText(-0.3f, 0.1f, "Press 'S' to Start Game", 0.05f);  // Opsi mulai game
-    drawText(-0.3f, 0.0f, "Press 'Q' to Quit", 0.05f);  // Opsi keluar game
-
-    glEnable(GL_DEPTH_TEST);  // Aktifkan kembali depth test untuk 3D
-}
 
 
 //NPC
@@ -240,36 +393,58 @@ float collisionDistance = 1.5f;  // Jarak ketika NPC menyentuh pemain (dalam uni
 
 
 void updateNpcPosition(float deltaTime) {
-    // Hitung arah dari NPC menuju pemain
+    // Hitung arah dari NPC menuju pemain (hanya X dan Z untuk gerak horizontal)
     float deltaX = posXBadan - npcX;
     float deltaY = posYBadan - npcY;
     float deltaZ = posZBadan - npcZ;
 
-    // Hitung jarak antara NPC dan pemain di ruang 3D
+    // Hitung jarak 3D
     float distance = sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
 
-    // Debugging - Periksa apakah jarak dihitung dengan benar
-    printf("NPC to Player Distance: %f\n", distance);
-
-    // Jika jarak antara NPC dan pemain lebih besar dari ambang batas, bergerak menuju pemain
     if (distance > 0.1f) {
         // Normalisasi arah
         float moveX = deltaX / distance;
-        float moveY = deltaY / distance;  // Perhitungan gerakan Y
+        float moveY = deltaY / distance;
         float moveZ = deltaZ / distance;
 
-        // Update posisi NPC dengan kecepatan perlahan
-        npcX += moveX * npcSpeed * deltaTime;
-        npcY += moveY * npcSpeed * deltaTime;  // Update posisi Y
-        npcZ += moveZ * npcSpeed * deltaTime;
+        // Posisi baru horizontal
+        float newX = npcX + moveX * npcSpeed * deltaTime;
+        float newZ = npcZ + moveZ * npcSpeed * deltaTime;
+
+        // Cek collision gedung
+        bool collisionFull = checkBuildingCollision(newX, newZ);
+        bool collisionX = checkBuildingCollision(newX, npcZ);
+        bool collisionZ = checkBuildingCollision(npcX, newZ);
+
+        // Sliding logic
+        if (!collisionFull) {
+            npcX = newX;
+            npcZ = newZ;
+        } else if (!collisionX && collisionZ) {
+            npcX = newX;
+            // npcZ tetap
+        } else if (collisionX && !collisionZ) {
+            // npcX tetap
+            npcZ = newZ;
+        } else {
+            // collision di dua sumbu, NPC berhenti bergerak
+        }
+
+        // Update posisi Y (naik turun) tanpa collision untuk sekarang
+        npcY += moveY * npcSpeed * deltaTime;
     }
 
     // Cek apakah NPC menyentuh pemain (Game Over)
-    if (distance < collisionDistance) {
+    float dist3D = sqrt(
+        (posXBadan - npcX) * (posXBadan - npcX) +
+        (posYBadan - npcY) * (posYBadan - npcY) +
+        (posZBadan - npcZ) * (posZBadan - npcZ)
+    );
+
+    if (dist3D < collisionDistance) {
         gameOver = true;
     }
 }
-
 
 void drawNpc() {
     glPushMatrix();
@@ -361,7 +536,7 @@ void renderGameOver() {
 
 int main() {
     double lastTime = glfwGetTime();
-
+    generateBuildings(30);
     if (!glfwInit()) return -1;
 
     GLFWwindow* window = glfwCreateWindow(800, 600, "Simple Player & Camera", NULL, NULL);
@@ -373,42 +548,62 @@ int main() {
     glfwMakeContextCurrent(window);
     glewInit();
 
-    init();
+        init();  // Inisialisasi OpenGL (lighting, quadric, dsb.)
+    glEnable(GL_TEXTURE_2D);
+    
+
+    // Load texture (jika ada file .jpg atau .png untuk ground)
+    int texWidth, texHeight, texChannels;
+    unsigned char* image = stbi_load("grasscomp.png", &texWidth, &texHeight, &texChannels, 0);
+    if (image) {
+        glGenTextures(1, &groundTexture);
+        glBindTexture(GL_TEXTURE_2D, groundTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texWidth, texHeight, 0, texChannels == 4 ? GL_RGBA : GL_RGB, GL_UNSIGNED_BYTE, image);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        stbi_image_free(image);
+    } else {
+        std::cerr << "Failed to load ground texture!\n";
+        std::exit(EXIT_FAILURE);
+    }
+
+    skyTexture = loadTexture("sky2.png");  // Pastikan ada file sky.jpg
+
 
     glfwSetFramebufferSizeCallback(window, reshape);
-    reshape(window, 800, 600);
+    reshape(window, WIDTH, HEIGHT);  // Set viewport awal
 
+    // Loop utama
     while (!glfwWindowShouldClose(window)) {
-    double currentTime = glfwGetTime();
-    double deltaTime = currentTime - lastTime;
-    lastTime = currentTime;
+        double currentTime = glfwGetTime();
+        float deltaTime = float(currentTime - lastTime);
+        lastTime = currentTime;
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    processInput(window, (float)deltaTime);  // pass deltaTime ke processInput
-    updateCamera();
-    updateNpcPosition((float)deltaTime);  // Update posisi NPC dengan deltaTime
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
 
-    if (gameOver) {
-        renderGameOver();  // Render layar merah Game Over
-    } else {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // Membersihkan layar sebelum menggambar ulang
-        processInput(window, (float)deltaTime);  // Hanya proses input jika game belum berakhir
         updateCamera();
-        updateNpcPosition((float)deltaTime);  // Update posisi NPC
+
+        if (!gameOver) {
+            processInput(window, deltaTime);
+            updateNpcPosition(deltaTime);
+        }
+        //renderSky();     
+        renderGround();
+        
+        drawBuildings();
+        drawPlayer();
+        drawNpc();
+        renderGameOver();  // Menampilkan teks Game Over jika gameOver == true
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
     }
 
-    renderGround();
-    drawPlayer();
-    drawNpc(); 
-
-    glfwSwapBuffers(window);
-    glfwPollEvents();
-    }
-
-
-    gluDeleteQuadric(quadric);
+    gluDeleteQuadric(quadric);  // Bersihkan memori
     glfwTerminate();
-
     return 0;
 }
+
