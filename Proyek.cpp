@@ -202,6 +202,80 @@ void drawBuildings() {
     }
 }
 
+bool checkBuildingCollision(float newX, float newZ) {
+    float playerSize = 0.5f; // radius collision pemain
+
+    for (const auto& b : buildings) {
+        float minX = b.x - b.width / 2.0f - playerSize;
+        float maxX = b.x + b.width / 2.0f + playerSize;
+        float minZ = b.z - b.depth / 2.0f - playerSize;
+        float maxZ = b.z + b.depth / 2.0f + playerSize;
+
+        if (newX >= minX && newX <= maxX &&
+            newZ >= minZ && newZ <= maxZ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Zone
+struct Zone {
+    float x, z;
+    float radius;
+};
+Zone activeZone;
+int score = 0;
+
+void spawnZone() {
+    float zoneRadius = 3.0f;
+    int attempts = 100;
+    while (attempts--) {
+        float x = randomFloat(AREA_MIN_X + zoneRadius, AREA_MAX_X - zoneRadius);
+        float z = randomFloat(AREA_MIN_Z + zoneRadius, AREA_MAX_Z - zoneRadius);
+
+        // Cek tabrakan dengan gedung
+        bool collide = false;
+        for (const auto& b : buildings) {
+            float minX = b.x - b.width / 2.0f - zoneRadius;
+            float maxX = b.x + b.width / 2.0f + zoneRadius;
+            float minZ = b.z - b.depth / 2.0f - zoneRadius;
+            float maxZ = b.z + b.depth / 2.0f + zoneRadius;
+            if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) {
+                collide = true;
+                break;
+            }
+        }
+        if (!collide) {
+            activeZone.x = x;
+            activeZone.z = z;
+            activeZone.radius = zoneRadius;
+            return;
+        }
+    }
+    // Jika gagal, letakkan di tengah
+    activeZone.x = 0.0f;
+    activeZone.z = 0.0f;
+    activeZone.radius = zoneRadius;
+}
+
+
+void drawZone() {
+    glPushMatrix();
+    glTranslatef(activeZone.x, 0.05f, activeZone.z);
+    glColor4f(0.0f, 1.0f, 0.0f, 0.5f); // hijau transparan
+    glDisable(GL_LIGHTING);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(0, 0, 0);
+    for (int i = 0; i <= 32; ++i) {
+        float angle = 2.0f * PI * i / 32;
+        glVertex3f(cos(angle) * activeZone.radius, 0, sin(angle) * activeZone.radius);
+    }
+    glEnd();
+    glEnable(GL_LIGHTING);
+    glPopMatrix();
+}
+// Zone End
 
 // Supply
 struct Supply {
@@ -235,25 +309,6 @@ void drawSupply() {
 }
 
 
-
-
-
-bool checkBuildingCollision(float newX, float newZ) {
-    float playerSize = 0.5f; // radius collision pemain
-
-    for (const auto& b : buildings) {
-        float minX = b.x - b.width / 2.0f - playerSize;
-        float maxX = b.x + b.width / 2.0f + playerSize;
-        float minZ = b.z - b.depth / 2.0f - playerSize;
-        float maxZ = b.z + b.depth / 2.0f + playerSize;
-
-        if (newX >= minX && newX <= maxX &&
-            newZ >= minZ && newZ <= maxZ) {
-            return true;
-        }
-    }
-    return false;
-}
 
 
 void spawnSupply() {
@@ -297,18 +352,24 @@ void pickupSupply() {
 
 void dropSupply() {
     if (carryingSupply) {
-        supplies.push_back({ posXBadan, 1.5f, posZBadan, true });
+        // Cek apakah supply dijatuhkan di dalam zona
+        float dx = posXBadan - activeZone.x;
+        float dz = posZBadan - activeZone.z;
+        float dist = sqrt(dx * dx + dz * dz);
+        if (dist <= activeZone.radius) {
+            score++;
+            std::cout << "Supply in zone! Score: " << score << std::endl;
+            spawnSupply();
+            spawnZone();
+        } else {
+            supplies.push_back({ posXBadan, 1.5f, posZBadan, true });
+        }
         carryingSupply = false;
         std::cout << "Supply dijatuhkan!\n";
     }
 }
 
-
-
-
 // Supply End
-
-
 
 void drawPlayer() {
     glPushMatrix();
@@ -967,6 +1028,7 @@ void renderGameOver() {
 int main() {
     double lastTime = glfwGetTime();
     generateBuildings(30);
+    spawnZone();
     spawnSupply();  // Spawn supply pertama kali
     if (!glfwInit()) return -1;
 
@@ -1046,6 +1108,23 @@ int main() {
             armAngle = 0.0f;
             legAngle = 0.0f;
         }
+
+        drawZone();
+
+        // Tampilkan skor
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        gluOrtho2D(0, WIDTH, 0, HEIGHT);
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        glColor3f(1,1,0);
+        drawText(-0.95f, 0.9f, "Score: " + std::to_string(score));
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
 
         drawPlayer();
 
