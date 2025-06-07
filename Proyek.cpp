@@ -9,7 +9,9 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
-
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #define PI 3.14159265358979323846f
 const float AREA_MIN_X = -100.0f;
 const float AREA_MAX_X =  100.0f;
@@ -23,8 +25,12 @@ GLuint buildingTexture;
 
 bool gameOver = false;  // Status game over
 
-float posXBadan = 0.0f, posYBadan = 0.0f, posZBadan = 0.0f;
+float posXBadan = 0.0f, posYBadan = 1.0f, posZBadan = 0.0f;
 float rotAngleY = 0.0f;  // Rotasi menghadap
+float armAngle = 0.0f;
+float legAngle = 0.0f;
+bool walking = false;
+float walkTime = 0.0f;
 
 GLUquadric* quadric;
 
@@ -300,19 +306,162 @@ void drawPlayer() {
     glTranslatef(posXBadan, posYBadan, posZBadan);
     glRotatef(rotAngleY, 0, 1, 0);
 
-    // Badan - cube 2x3x1
-    glColor3f(0.2f, 0.6f, 0.8f);
+    // Badan atas
     glPushMatrix();
-    glScalef(1.5f, 2.5f, 1.0f);
+    glTranslatef(0.0f, 0.5f, 0.0f);
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.75f, 0.4f, 0.4f);
     drawCube(1.0f);
     glPopMatrix();
 
-    // Kepala - sphere di atas badan
+    // Badan bawah
     glPushMatrix();
-    glTranslatef(0.0f, 2.0f, 0.0f);
-    glColor3f(0.9f, 0.7f, 0.5f);
-    gluSphere(quadric, 0.7, 20, 20);
+    glTranslatef(0.0f, -0.3f, 0.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.65f, 0.3f, 0.25f);
+    drawCube(1.0f);
     glPopMatrix();
+    glPopMatrix();
+
+    // Kepala
+    glPushMatrix();
+    glTranslatef(0.0f, 1.1f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    GLUquadric* quad = gluNewQuadric();
+    gluSphere(quad, 0.4f, 20, 20);
+    gluDeleteQuadric(quad);
+    glPopMatrix();
+
+    // Antena Kiri
+    glPushMatrix();
+    glTranslatef(-0.3f, 1.6f, 0.3f);
+    glRotatef(45, 0, 0, 1);
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.05f, 0.7f, 0.05f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Antena Kanan
+    glPushMatrix();
+    glTranslatef(0.3f, 1.6f, 0.3f);
+    glRotatef(-45, 0, 0, 1);
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.05f, 0.7f, 0.05f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kotak Merah di Antara Antena
+    glPushMatrix();
+    glTranslatef(0.0f, 1.4f, 0.3f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.2f, 0.2f, 0.2f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Lengan Kiri (pivot di bahu)
+    glPushMatrix();
+    glTranslatef(-0.5f, 0.7f, 0.0f);      // ke posisi bahu
+    glRotatef(armAngle, 1, 0, 0);         // rotasi di bahu
+    glTranslatef(0.0f, -0.375f, 0.0f);    // ke tengah lengan
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Tangan Kiri (sphere di ujung bawah lengan)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.375f, 0.0f); // ke ujung bawah lengan
+    glColor3f(0.5f, 0.5f, 0.5f);
+    GLUquadric* handLeft = gluNewQuadric();
+    gluSphere(handLeft, 0.15f, 16, 16);
+    gluDeleteQuadric(handLeft);
+    glPopMatrix();
+
+    glPopMatrix();
+
+    // Lengan Kanan (pivot di bahu)
+    glPushMatrix();
+    glTranslatef(0.5f, 0.7f, 0.0f);
+    glRotatef(-armAngle, 1, 0, 0);
+    glTranslatef(0.0f, -0.375f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Tangan Kanan (sphere di ujung bawah lengan)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.375f, 0.0f);
+    glColor3f(0.5f, 0.5f, 0.5f);
+    GLUquadric* handRight = gluNewQuadric();
+    gluSphere(handRight, 0.15f, 16, 16);
+    gluDeleteQuadric(handRight);
+    glPopMatrix();
+
+    glPopMatrix();
+
+    // Pinggang
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.75f, 0.2f, 0.3f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+// Kaki Kiri (pivot di pinggang)
+glPushMatrix();
+glTranslatef(-0.25f, -0.225f, 0.0f);    // ke posisi pangkal kaki kiri
+glRotatef(legAngle, 1, 0, 0);          // rotasi kaki kiri di pangkal
+glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kiri
+glColor3f(1.0f, 1.0f, 1.0f);
+glPushMatrix();
+glScalef(0.25f, 0.75f, 0.25f);
+drawCube(1.0f);
+glPopMatrix();
+
+// Telapak Kiri (ikut kaki)
+glPushMatrix();
+glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kiri, lalu sedikit ke depan
+glColor3f(1.0f, 0.0f, 0.0f);
+glPushMatrix();
+glScalef(0.35f, 0.15f, 0.7f);
+drawCube(1.0f);
+glPopMatrix();
+glPopMatrix();
+
+
+// Kaki Kanan (pivot di pinggang)
+glPushMatrix();
+glTranslatef(0.25f, -0.225f, 0.0f);     // ke posisi pangkal kaki kanan
+glRotatef(-legAngle, 1, 0, 0);         // rotasi kaki kanan di pangkal
+glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kanan
+glColor3f(1.0f, 1.0f, 1.0f);
+glPushMatrix();
+glScalef(0.25f, 0.75f, 0.25f);
+drawCube(1.0f);
+glPopMatrix();
+
+// Telapak Kanan (ikut kaki)
+glPushMatrix();
+glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kanan, lalu sedikit ke depan
+glColor3f(1.0f, 0.0f, 0.0f);
+glPushMatrix();
+glScalef(0.35f, 0.15f, 0.7f);
+drawCube(1.0f);
+glPopMatrix();
+glPopMatrix();
 
     glPopMatrix();
 }
@@ -372,7 +521,7 @@ void renderSky() {
 
 
 void updateCamera() {
-    float camDistance = 10.0f;   // Jarak kamera dari pemain
+    float camDistance = 15.0f;   // Jarak kamera dari pemain
     float camHeight = 5.0f;      // Kalau kamu ingin, bisa pakai untuk offset vertikal tambahan
     float pitchAngle = -10.0f;    // Pitch dalam derajat (positif = lihat ke bawah)
 
@@ -547,8 +696,215 @@ void drawNpc() {
     glTranslatef(npcX, npcY, npcZ);  // Posisi NPC
     glColor3f(1.0f, 0.0f, 0.0f);    // Warna merah
 
-    // Gambar NPC sebagai bola kecil
-    gluSphere(quadric, 1.0, 10, 10);
+    glPushMatrix();
+    glTranslatef(0.0f, 0.5f, 0.0f);
+    glColor3f(0.0f, 0.0f, 1.0f);
+    glPushMatrix();
+    glScalef(1.5f, 1.0f, 0.8f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Badan bawah
+    glPushMatrix();
+    glTranslatef(0.0f, -0.8f, 0.0f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(1.3f, 0.8f, 0.5f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kepala
+    glPushMatrix();
+    glTranslatef(0.0f, 1.3f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    GLUquadric* quad = gluNewQuadric();
+    gluSphere(quad, 0.4f, 20, 20);
+    gluDeleteQuadric(quad);
+    glPopMatrix();
+
+    // Antena Kiri
+    glPushMatrix();
+    glTranslatef(-0.3f, 1.8f, 0.3f);
+    glRotatef(45, 0, 0, 1);
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.05f, 0.7f, 0.05f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Antena Kanan
+    glPushMatrix();
+    glTranslatef(0.3f, 1.8f, 0.3f);
+    glRotatef(-45, 0, 0, 1);
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.05f, 0.7f, 0.05f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kotak Merah di Antara Antena
+    glPushMatrix();
+    glTranslatef(0.0f, 1.6f, 0.3f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.2f, 0.2f, 0.2f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Lengan Kiri
+    glPushMatrix();
+    glTranslatef(-1.0f, 0.3f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.4f, 1.5f, 0.4f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Lengan Kanan
+    glPushMatrix();
+    glTranslatef(1.0f, 0.3f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.4f, 1.5f, 0.4f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Tangan Kiri
+    glPushMatrix();
+    glTranslatef(-1.0f, -0.6f, 0.0f);
+    glColor3f(0.5f, 0.5f, 0.5f);
+    GLUquadric* handLeft = gluNewQuadric();
+    gluSphere(handLeft, 0.25f, 16, 16);
+    gluDeleteQuadric(handLeft);
+    glPopMatrix();
+
+    // Tangan Kanan
+    glPushMatrix();
+    glTranslatef(1.0f, -0.6f, 0.0f);
+    glColor3f(0.5f, 0.5f, 0.5f);
+    GLUquadric* handRight = gluNewQuadric();
+    gluSphere(handRight, 0.25f, 16, 16);
+    gluDeleteQuadric(handRight);
+    glPopMatrix();
+
+    // Shield
+    glPushMatrix();
+    glTranslatef(1.3f, 0.2f, 0.0f);
+    glScalef(0.5f, 3.5f, 1.5f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    const float depth = 0.1f;
+    const float radius = 0.5f;
+
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 6; i++) {
+        float angle = i * M_PI / 3.0f + M_PI / 6.0f;
+        glVertex3f(depth, radius * cos(angle), radius * sin(angle));
+    }
+    glEnd();
+
+    glBegin(GL_POLYGON);
+    for (int i = 0; i < 6; i++) {
+        float angle = i * M_PI / 3.0f + M_PI / 6.0f;
+        glVertex3f(-depth, radius * cos(angle), radius * sin(angle));
+    }
+    glEnd();
+
+    glBegin(GL_QUADS);
+    for (int i = 0; i < 6; i++) {
+        float angle1 = i * M_PI / 3.0f + M_PI / 6.0f;
+        float angle2 = (i + 1) * M_PI / 3.0f + M_PI / 6.0f;
+
+        float y1 = radius * cos(angle1);
+        float z1 = radius * sin(angle1);
+        float y2 = radius * cos(angle2);
+        float z2 = radius * sin(angle2);
+
+        glVertex3f(depth, y1, z1);
+        glVertex3f(depth, y2, z2);
+        glVertex3f(-depth, y2, z2);
+        glVertex3f(-depth, y1, z1);
+    }
+    glEnd();
+
+    // Ornamen
+    glPushMatrix();
+    glTranslatef(0.15f, -0.05f, 0.0f); 
+    glColor3f(1.0f, 1.0f, 0.0f);
+    glScalef(0.1f, 0.6f, 0.1f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Beam Saber
+    glPushMatrix();
+    glTranslatef(-1.0f, -0.6f, 0.0f);
+    glRotatef(0, 0, 1, 0);
+
+    // Beam
+    glColor3f(3.0f, 0.0f, 1.0f);
+    GLUquadric* saber = gluNewQuadric();
+    gluCylinder(saber, 0.09, 0.09, 2.5, 16, 16);
+
+    // Handle
+    glTranslatef(0.0f, 0.0f, -0.25f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    gluCylinder(saber, 0.1, 0.1, 0.7, 16, 16);
+    gluDeleteQuadric(saber);
+    glPopMatrix();
+
+    // Pinggang
+    glPushMatrix();
+    glTranslatef(0.0f, -0.9f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(1.5f, 0.4f, 0.6f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kaki Kiri
+    glPushMatrix();
+    glTranslatef(-0.5f, -1.8f, 0.0f);
+    glColor3f(1.0f, 1.0f, 1.0f);
+    glPushMatrix();
+    glScalef(0.5f, 1.5f, 0.5f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kaki Kanan
+    glPushMatrix();
+    glTranslatef(0.5f, -1.8f, 0.0f);
+    glPushMatrix();
+    glScalef(0.5f, 1.5f, 0.5f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Telapak Kiri
+    glPushMatrix();
+    glTranslatef(-0.5f, -2.7f, 0.2f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.7f, 0.3f, 1.4f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Telapak Kanan
+    glPushMatrix();
+    glTranslatef(0.5f, -2.7f, 0.2f);
+    glPushMatrix();
+    glScalef(0.7f, 0.3f, 1.4f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
 
     glPopMatrix();
 }
@@ -692,6 +1048,22 @@ int main() {
         
         drawBuildings();
         drawSupply();
+        
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
+            walking = true;
+            walkTime += 0.02f; // kecepatan animasi
+        } else {
+            walking = false;
+            walkTime = 0.0f;
+        }
+        if (walking) {
+            armAngle = 30.0f * sin(walkTime);
+            legAngle = 30.0f * -sin(walkTime);
+        } else {
+            armAngle = 0.0f;
+            legAngle = 0.0f;
+        }
+
         drawPlayer();
         drawNpc();
           // Gambar supply yang ada
@@ -705,3 +1077,4 @@ int main() {
     glfwTerminate();
     return 0;
 }
+
