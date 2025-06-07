@@ -185,6 +185,111 @@ void drawBuildings() {
 }
 
 
+// Supply
+struct Supply {
+    float x, y, z;
+    bool active;
+};
+std::vector<Supply> supplies;
+bool carryingSupply = false;
+bool firstSupplySpawned = false;
+bool keyPressedE = false;
+
+void drawSupply() {
+    for (const auto& s : supplies) {
+        if (s.active) {
+            glColor3f(0.2f, 0.6f, 0.8f);
+            glPushMatrix();
+            glTranslatef(s.x, s.y, s.z);  // Tambahkan ini untuk memindahkan ke posisi supply
+            glScalef(1.5f, 2.5f, 1.0f);
+            drawCube(1.0f);
+            glPopMatrix();
+        }
+    }
+
+    if (carryingSupply) {
+        glPushMatrix();
+        glTranslatef(posXBadan, 1.5f, posZBadan);
+        glColor3f(1.0f, 1.0f, 0.0f);
+        drawCube(0.3f);
+        glPopMatrix();
+    }
+}
+
+
+
+
+
+bool checkBuildingCollision(float newX, float newZ) {
+    float playerSize = 0.5f; // radius collision pemain
+
+    for (const auto& b : buildings) {
+        float minX = b.x - b.width / 2.0f - playerSize;
+        float maxX = b.x + b.width / 2.0f + playerSize;
+        float minZ = b.z - b.depth / 2.0f - playerSize;
+        float maxZ = b.z + b.depth / 2.0f + playerSize;
+
+        if (newX >= minX && newX <= maxX &&
+            newZ >= minZ && newZ <= maxZ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+void spawnSupply() {
+    float headY = 1.5f; // Sama seperti posisi kepala karakter
+
+    if (!firstSupplySpawned) {
+        supplies.push_back({ posXBadan, headY, posZBadan - 3.0f, true });
+        firstSupplySpawned = true;
+    } else {
+        int attempts = 100;
+        while (attempts--) {
+            float x = ((rand() % 1000) / 10.0f) - 50.0f;
+            float z = ((rand() % 1000) / 10.0f) - 50.0f;
+            if (!checkBuildingCollision(x, z)) {
+                supplies.push_back({ x, headY, z, true });
+                break;
+            }
+        }
+    }
+}
+
+
+void pickupSupply() {
+    if (carryingSupply) return;
+
+    for (auto& s : supplies) {
+        if (s.active) {
+            float dx = s.x - posXBadan;
+            float dz = s.z - posZBadan;
+            float distance = sqrt(dx * dx + dz * dz);
+            if (distance < 2.0f) { // dekat cukup
+                s.active = false;
+                carryingSupply = true;
+                std::cout << "Picked up supply!\n";
+                break;
+            }
+        }
+    }
+}
+
+
+void dropSupply() {
+    if (carryingSupply) {
+        supplies.push_back({ posXBadan, 1.5f, posZBadan, true });
+        carryingSupply = false;
+        std::cout << "Supply dijatuhkan!\n";
+    }
+}
+
+
+
+
+// Supply End
+
 
 
 void drawPlayer() {
@@ -288,22 +393,6 @@ void updateCamera() {
               0, 1, 0);
 }
 
-bool checkBuildingCollision(float newX, float newZ) {
-    float playerSize = 0.5f; // radius collision pemain
-
-    for (const auto& b : buildings) {
-        float minX = b.x - b.width / 2.0f - playerSize;
-        float maxX = b.x + b.width / 2.0f + playerSize;
-        float minZ = b.z - b.depth / 2.0f - playerSize;
-        float maxZ = b.z + b.depth / 2.0f + playerSize;
-
-        if (newX >= minX && newX <= maxX &&
-            newZ >= minZ && newZ <= maxZ) {
-            return true;
-        }
-    }
-    return false;
-}
 
 void processInput(GLFWwindow* window, float deltaTime) {
     if (gameOver) return;
@@ -319,6 +408,14 @@ void processInput(GLFWwindow* window, float deltaTime) {
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
         rotAngleY -= rotSpeed * deltaTime;  // Putar ke kanan
         if (rotAngleY < 0.0f) rotAngleY += 360.0f;
+    }
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS && !keyPressedE) {
+        keyPressedE = true;
+        pickupSupply(); // <- panggil ini
+    }
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+        keyPressedE = false;
+        dropSupply();
     }
 
     // Gerak maju mundur (W/S)
@@ -386,7 +483,7 @@ void renderGround() {
 
 
 //NPC
-float npcX = 20.0f, npcY = 0.0f, npcZ = 20.0f;  // Posisi awal NPC
+float npcX = 20.0f, npcY = 2.0f, npcZ = 20.0f;  // Posisi awal NPC
 float npcSpeed = 5.0f;  // Kecepatan pergerakan NPC
 
 float collisionDistance = 1.5f;  // Jarak ketika NPC menyentuh pemain (dalam unit)
@@ -537,6 +634,7 @@ void renderGameOver() {
 int main() {
     double lastTime = glfwGetTime();
     generateBuildings(30);
+    spawnSupply();  // Spawn supply pertama kali
     if (!glfwInit()) return -1;
 
     GLFWwindow* window = glfwCreateWindow(800, 600, "Simple Player & Camera", NULL, NULL);
@@ -590,12 +688,14 @@ int main() {
             processInput(window, deltaTime);
             updateNpcPosition(deltaTime);
         }
-        //renderSky();     
+        renderSky();     
         renderGround();
         
         drawBuildings();
+        drawSupply();
         drawPlayer();
         drawNpc();
+          // Gambar supply yang ada
         renderGameOver();  // Menampilkan teks Game Over jika gameOver == true
 
         glfwSwapBuffers(window);
@@ -606,4 +706,3 @@ int main() {
     glfwTerminate();
     return 0;
 }
-
