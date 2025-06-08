@@ -6,7 +6,6 @@
 #include <iostream>  // Untuk std::cerr
 #include <cstdlib>  // Untuk std::exit
 #include <vector>
-
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #ifndef M_PI
@@ -20,24 +19,21 @@ const float AREA_MAX_Z =  100.0f;
 GLuint groundTexture;
 GLuint skyTexture;
 GLuint buildingTexture;
-
-
-
+GLuint supplyTexture;
 bool gameOver = false;  // Status game over
-
 float posXBadan = 0.0f, posYBadan = 1.0f, posZBadan = 0.0f;
 float rotAngleY = 0.0f;  // Rotasi menghadap
 float armAngle = 0.0f;
 float legAngle = 0.0f;
 bool walking = false;
 float walkTime = 0.0f;
-
 float npcWalkTime = 0.0f;
 float npcArmAngle = 0.0f;
 float npcLegAngle = 0.0f;
-
+float npc2WalkTime = 0.0f;
+float npc2ArmAngle = 0.0f;
+float npc2LegAngle = 0.0f;
 float animSpeed = 10.0f;
-
 GLUquadric* quadric;
 
 void init() {
@@ -75,42 +71,47 @@ void reshape(GLFWwindow* window, int width, int height) {
 void drawCube(float size) {
     float half = size / 2.0f;
     glBegin(GL_QUADS);
-    // Front face (z = half)
+    // Front face
     glNormal3f(0,0,1);
-    glVertex3f(-half, -half, half);
-    glVertex3f(half, -half, half);
-    glVertex3f(half, half, half);
-    glVertex3f(-half, half, half);
-    // Back face (z = -half)
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-half, -half, half);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(half, -half, half);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(half, half, half);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-half, half, half);
+
+    // Back face
     glNormal3f(0,0,-1);
-    glVertex3f(-half, -half, -half);
-    glVertex3f(-half, half, -half);
-    glVertex3f(half, half, -half);
-    glVertex3f(half, -half, -half);
-    // Left face (x = -half)
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-half, -half, -half);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(half, -half, -half);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(half, half, -half);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-half, half, -half);
+
+    // Left face
     glNormal3f(-1,0,0);
-    glVertex3f(-half, -half, -half);
-    glVertex3f(-half, -half, half);
-    glVertex3f(-half, half, half);
-    glVertex3f(-half, half, -half);
-    // Right face (x = half)
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-half, -half, -half);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-half, -half, half);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-half, half, half);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-half, half, -half);
+
+    // Right face
     glNormal3f(1,0,0);
-    glVertex3f(half, -half, -half);
-    glVertex3f(half, half, -half);
-    glVertex3f(half, half, half);
-    glVertex3f(half, -half, half);
-    // Top face (y = half)
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(half, -half, -half);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(half, -half, half);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(half, half, half);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(half, half, -half);
+
+    // Top face
     glNormal3f(0,1,0);
-    glVertex3f(-half, half, -half);
-    glVertex3f(-half, half, half);
-    glVertex3f(half, half, half);
-    glVertex3f(half, half, -half);
-    // Bottom face (y = -half)
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-half, half, -half);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-half, half, half);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(half, half, half);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(half, half, -half);
+
+    // Bottom face
     glNormal3f(0,-1,0);
-    glVertex3f(-half, -half, -half);
-    glVertex3f(half, -half, -half);
-    glVertex3f(half, -half, half);
-    glVertex3f(-half, -half, half);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-half, -half, -half);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(half, -half, -half);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(half, -half, half);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-half, -half, half);
     glEnd();
 }
 
@@ -135,13 +136,25 @@ void generateBuildings(int count) {
 
     for (int i = 0; i < count; i++) {
         Building b;
-        b.x = randomFloat(AREA_MIN_X, AREA_MAX_X);
-        b.z = randomFloat(AREA_MIN_Z, AREA_MAX_Z);
-        b.width = randomFloat(5.0f, 15.0f);   
-        b.depth = randomFloat(5.0f, 15.0f);
-        b.height = randomFloat(10.0f, 50.0f);
+        int attempts = 100;
+        while (attempts--) {
+            b.x = randomFloat(AREA_MIN_X, AREA_MAX_X);
+            b.z = randomFloat(AREA_MIN_Z, AREA_MAX_Z);
+            b.width = randomFloat(5.0f, 15.0f);   
+            b.depth = randomFloat(5.0f, 15.0f);
+            b.height = randomFloat(10.0f, 50.0f);
 
-        buildings.push_back(b);
+            // Cek jarak ke posisi spawn player
+            float minDist = 5.0f; // minimal jarak aman (bisa disesuaikan)
+            float dx = b.x - posXBadan;
+            float dz = b.z - posZBadan;
+            float dist = sqrt(dx*dx + dz*dz);
+
+            if (dist > minDist) {
+                buildings.push_back(b);
+                break;
+            }
+        }
     }
 }
 
@@ -291,28 +304,30 @@ void drawSupply() {
     // Gambar semua supply yang masih aktif di dunia
     for (const auto& s : supplies) {
         if (s.active) {
-            glColor3f(0.2f, 0.6f, 0.8f);
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, supplyTexture);
+            glColor3f(1.0f, 1.0f, 1.0f); // warna putih agar tekstur tampil asli
             glPushMatrix();
             glTranslatef(s.x, s.y, s.z);
             glScalef(1.5f, 0.5f, 1.0f);
             drawCube(1.0f);
             glPopMatrix();
+            glDisable(GL_TEXTURE_2D);
         }
     }
 
-    // Jika sedang membawa supply, gambar supply di atas kepala
     if (carryingSupply) {
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, supplyTexture);
+        glColor3f(1.0f, 1.0f, 1.0f);
         glPushMatrix();
-        // Pusatkan ke posisi player
         glTranslatef(posXBadan, posYBadan, posZBadan);
-        // Rotasi sesuai arah player
         glRotatef(rotAngleY, 0, 1, 0);
-        // Pindahkan ke atas kepala (relatif terhadap badan)
-        glTranslatef(0.0f, 1.7f, 0.0f);
-        glColor3f(0.2f, 0.6f, 0.8f);
+        glTranslatef(0.0f, 1.9f, 0.0f);
         glScalef(1.5f, 0.5f, 1.0f);
         drawCube(1.0f);
         glPopMatrix();
+        glDisable(GL_TEXTURE_2D);
     }
 }
 
@@ -323,7 +338,7 @@ void spawnSupply() {
     float headY = 1.5f; // Sama seperti posisi kepala karakter
 
     if (!firstSupplySpawned) {
-        supplies.push_back({ posXBadan, headY, posZBadan - 3.0f, true });
+        supplies.push_back({ posXBadan, headY, posZBadan + 3.0f, true });
         firstSupplySpawned = true;
     } else {
         int attempts = 100;
@@ -731,9 +746,9 @@ void renderGround() {
 
 
 
-//NPC
+//NPC 1
 float npcX = 20.0f, npcY = 2.0f, npcZ = 20.0f;  // Posisi awal NPC
-float npcSpeed = 5.0f;  // Kecepatan pergerakan NPC
+float npcSpeed = 7.0f;  // Kecepatan pergerakan NPC
 float dx = posXBadan - npcX;
 float dz = posZBadan - npcZ;
 float npcYaw = atan2(dx, dz) * 180.0f / M_PI;
@@ -807,18 +822,19 @@ void drawNpc() {
         // Badan atas
     glPushMatrix();
     glTranslatef(0.0f, 0.5f, 0.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(133.0f/255.0f, 51.0f/255.0f, 40.0f/255.0f);
     glPushMatrix();
     glScalef(0.75f, 0.4f, 0.4f);
     drawCube(1.0f);
     glPopMatrix();
+    glPopMatrix();
 
     // Badan bawah
     glPushMatrix();
-    glTranslatef(0.0f, -0.3f, 0.0f);
-    glColor3f(1.0f, 0.2f, 0.0f);
+    glTranslatef(0.0f, 0.1f, 0.0f);
+    glColor3f(133.0f/255.0f, 51.0f/255.0f, 40.0f/255.0f);
     glPushMatrix();
-    glScalef(0.65f, 0.3f, 0.25f);
+    glScalef(0.65f, 0.4f, 0.25f);
     drawCube(1.0f);
     glPopMatrix();
     glPopMatrix();
@@ -826,42 +842,32 @@ void drawNpc() {
     // Kepala
     glPushMatrix();
     glTranslatef(0.0f, 1.1f, 0.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(222.0f/255.0f, 106.0f/255.0f, 91.0f/255.0f);
     GLUquadric* quad = gluNewQuadric();
     gluSphere(quad, 0.4f, 20, 20);
     gluDeleteQuadric(quad);
     glPopMatrix();
 
-    // Antena Kiri
-    glPushMatrix();
-    glTranslatef(-0.3f, 1.6f, 0.3f);
-    glRotatef(45, 0, 0, 1);
-    glColor3f(1.0f, 1.0f, 0.0f);
-    glPushMatrix();
-    glScalef(0.05f, 0.7f, 0.05f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
 
-    // Antena Kanan
+    // MonoEye
     glPushMatrix();
-    glTranslatef(0.3f, 1.6f, 0.3f);
-    glRotatef(-45, 0, 0, 1);
-    glColor3f(1.0f, 1.0f, 0.0f);
-    glPushMatrix();
-    glScalef(0.05f, 0.7f, 0.05f);
-    drawCube(1.0f);
-    glPopMatrix();
-    glPopMatrix();
-
-    // Kotak Merah di Antara Antena
-    glPushMatrix();
-    glTranslatef(0.0f, 1.4f, 0.3f);
+    glTranslatef(0.0f, 1.1f, 0.35f);
     glColor3f(1.0f, 0.0f, 0.0f);
     glPushMatrix();
-    glScalef(0.2f, 0.2f, 0.2f);
+    glScalef(0.2f, 0.1f, 0.2f);
     drawCube(1.0f);
     glPopMatrix();
+    glPopMatrix();
+
+    // Visor (silinder oval)
+    glPushMatrix();
+    glTranslatef(0.0f, 1.2f, 0.15f); // posisi visor
+    glRotatef(90, 1, 0, 0);         // rotasi agar silinder menghadap ke depan
+    glScalef(1.5f, 1.0f, 1.0f);     // skala X diperbesar, jadi oval di tampak depan
+    glColor3f(0.0f, 0.0f, 0.0f);
+    GLUquadric* visor = gluNewQuadric();
+    gluCylinder(visor, 0.25f, 0.25f, 0.2f, 24, 4); // radius atas, radius bawah, tinggi, slices, stacks
+    gluDeleteQuadric(visor);
     glPopMatrix();
 
     // Lengan Kiri (pivot di bahu)
@@ -869,7 +875,7 @@ void drawNpc() {
     glTranslatef(-0.5f, 0.7f, 0.0f);      // ke posisi bahu
     glRotatef(npcArmAngle, 1, 0, 0);         // rotasi di bahu
     glTranslatef(0.0f, -0.375f, 0.0f);    // ke tengah lengan
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(222.0f/255.0f, 106.0f/255.0f, 91.0f/255.0f);
     glPushMatrix();
     glScalef(0.25f, 0.75f, 0.25f);
     drawCube(1.0f);
@@ -878,7 +884,7 @@ void drawNpc() {
     // Tangan Kiri (sphere di ujung bawah lengan)
     glPushMatrix();
     glTranslatef(0.0f, -0.375f, 0.0f); // ke ujung bawah lengan
-    glColor3f(0.5f, 0.5f, 0.5f);
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
     GLUquadric* handLeft = gluNewQuadric();
     gluSphere(handLeft, 0.15f, 16, 16);
     gluDeleteQuadric(handLeft);
@@ -891,7 +897,7 @@ void drawNpc() {
     glTranslatef(0.5f, 0.7f, 0.0f);
     glRotatef(-npcArmAngle, 1, 0, 0);
     glTranslatef(0.0f, -0.375f, 0.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(222.0f/255.0f, 106.0f/255.0f, 91.0f/255.0f);
     glPushMatrix();
     glScalef(0.25f, 0.75f, 0.25f);
     drawCube(1.0f);
@@ -900,7 +906,7 @@ void drawNpc() {
     // Tangan Kanan (sphere di ujung bawah lengan)
     glPushMatrix();
     glTranslatef(0.0f, -0.375f, 0.0f);
-    glColor3f(0.5f, 0.5f, 0.5f);
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
     GLUquadric* handRight = gluNewQuadric();
     gluSphere(handRight, 0.15f, 16, 16);
     gluDeleteQuadric(handRight);
@@ -911,9 +917,9 @@ void drawNpc() {
     // Pinggang
     glPushMatrix();
     glTranslatef(0.0f, 0.0f, 0.0f);
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(133.0f/255.0f, 51.0f/255.0f, 40.0f/255.0f);
     glPushMatrix();
-    glScalef(0.75f, 0.2f, 0.3f);
+    glScalef(0.75f, 0.3f, 0.3f);
     drawCube(1.0f);
     glPopMatrix();
     glPopMatrix();
@@ -923,29 +929,31 @@ void drawNpc() {
     glTranslatef(-0.25f, -0.225f, 0.0f);    // ke posisi pangkal kaki kiri
     glRotatef(npcLegAngle, 1, 0, 0);          // rotasi kaki kiri di pangkal
     glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kiri
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(222.0f/255.0f, 106.0f/255.0f, 91.0f/255.0f);
     glPushMatrix();
     glScalef(0.25f, 0.75f, 0.25f);
     drawCube(1.0f);
     glPopMatrix();
 
+
     // Telapak Kiri (ikut kaki)
     glPushMatrix();
     glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kiri, lalu sedikit ke depan
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
     glPushMatrix();
     glScalef(0.35f, 0.15f, 0.7f);
     drawCube(1.0f);
     glPopMatrix();
     glPopMatrix();
 
+    //glPopMatrix();
 
     // Kaki Kanan (pivot di pinggang)
     glPushMatrix();
     glTranslatef(0.25f, -0.225f, 0.0f);     // ke posisi pangkal kaki kanan
     glRotatef(-npcLegAngle, 1, 0, 0);         // rotasi kaki kanan di pangkal
     glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kanan
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glColor3f(222.0f/255.0f, 106.0f/255.0f, 91.0f/255.0f);
     glPushMatrix();
     glScalef(0.25f, 0.75f, 0.25f);
     drawCube(1.0f);
@@ -953,8 +961,8 @@ void drawNpc() {
 
     // Telapak Kanan (ikut kaki)
     glPushMatrix();
-    glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kanan, lalu sedikit ke depan
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glTranslatef(0.0f, -0.35f, 0.1f);
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
     glPushMatrix();
     glScalef(0.35f, 0.15f, 0.7f);
     drawCube(1.0f);
@@ -962,10 +970,223 @@ void drawNpc() {
     glPopMatrix();
 
     glPopMatrix();
+
 }
 
+/*NPC 2
+float npc2X = 10.0f, npc2Y = 2.0f, npc2Z = 10.0f;  // Posisi awal NPC
+float npc2Speed = 7.0f;  // Kecepatan pergerakan NPC
+float dx2 = posXBadan - npc2X;
+float dz2 = posZBadan - npc2Z;
+float npc2Yaw = atan2(dx2, dz2) * 180.0f / M_PI;
 
 
+void updateNpc2Position(float deltaTime) {
+    float deltaX = posXBadan - npc2X;
+    float deltaY = posYBadan - npc2Y;
+    float deltaZ = posZBadan - npc2Z;
+
+    float distance = sqrt(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+
+    if (distance > 0.1f) {
+        float moveX = deltaX / distance;
+        float moveY = deltaY / distance;
+        float moveZ = deltaZ / distance;
+
+        float new2X = npc2X + moveX * npc2Speed * deltaTime;
+        float new2Z = npc2Z + moveZ * npc2Speed * deltaTime;
+
+        bool collisionFull = checkBuildingCollision(new2X, new2Z);
+        bool collisionX = checkBuildingCollision(new2X, npc2Z);
+        bool collisionZ = checkBuildingCollision(npc2X, new2Z);
+
+        if (!collisionFull) {
+            npc2X = new2X;
+            npc2Z = new2Z;
+        } else if (!collisionX && collisionZ) {
+            npc2X = new2X;
+        } else if (collisionX && !collisionZ) {
+            npc2Z = new2Z;
+        }
+        npc2Y += moveY * npc2Speed * deltaTime;
+    }
+
+    float dist3D = sqrt(
+        (posXBadan - npc2X) * (posXBadan - npc2X) +
+        (posYBadan - npc2Y) * (posYBadan - npc2Y) +
+        (posZBadan - npc2Z) * (posZBadan - npc2Z)
+    );
+
+    if (dist3D < collisionDistance) {
+        gameOver = true;
+    }
+}
+
+void drawNpc2() {
+    glPushMatrix();
+    glTranslatef(npc2X, npc2Y, npc2Z);  // Posisi NPC
+    glColor3f(1.0f, 0.0f, 0.0f);    // Warna merah
+
+    float dx2 = posXBadan - npc2X;
+    float dz2 = posZBadan - npc2Z;
+    float npc2Yaw = atan2(dx2, dz2) * 180.0f / M_PI;
+    glRotatef(npc2Yaw, 0, 1, 0);
+
+        // Badan atas
+    glPushMatrix();
+    glTranslatef(0.0f, 0.5f, 0.0f);
+    glColor3f(44.0f/255.0f, 69.0f/255.0f, 28.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.75f, 0.4f, 0.4f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Badan bawah
+    glPushMatrix();
+    glTranslatef(0.0f, 0.1f, 0.0f);
+    glColor3f(44.0f/255.0f, 69.0f/255.0f, 28.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.65f, 0.4f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kepala
+    glPushMatrix();
+    glTranslatef(0.0f, 1.1f, 0.0f);
+    glColor3f(139.0f/255.0f, 212.0f/255.0f, 91.0f/255.0f);
+    GLUquadric* quad = gluNewQuadric();
+    gluSphere(quad, 0.4f, 20, 20);
+    gluDeleteQuadric(quad);
+    glPopMatrix();
+
+
+    // MonoEye
+    glPushMatrix();
+    glTranslatef(0.0f, 1.1f, 0.35f);
+    glColor3f(1.0f, 0.0f, 0.0f);
+    glPushMatrix();
+    glScalef(0.2f, 0.1f, 0.2f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Visor (silinder oval)
+    glPushMatrix();
+    glTranslatef(0.0f, 1.2f, 0.15f); // posisi visor
+    glRotatef(90, 1, 0, 0);         // rotasi agar silinder menghadap ke depan
+    glScalef(1.5f, 1.0f, 1.0f);     // skala X diperbesar, jadi oval di tampak depan
+    glColor3f(0.0f, 0.0f, 0.0f);
+    GLUquadric* visor = gluNewQuadric();
+    gluCylinder(visor, 0.25f, 0.25f, 0.2f, 24, 4); // radius atas, radius bawah, tinggi, slices, stacks
+    gluDeleteQuadric(visor);
+    glPopMatrix();
+
+    // Lengan Kiri (pivot di bahu)
+    glPushMatrix();
+    glTranslatef(-0.5f, 0.7f, 0.0f);      // ke posisi bahu
+    glRotatef(npc2ArmAngle, 1, 0, 0);         // rotasi di bahu
+    glTranslatef(0.0f, -0.375f, 0.0f);    // ke tengah lengan
+    glColor3f(139.0f/255.0f, 212.0f/255.0f, 91.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Tangan Kiri (sphere di ujung bawah lengan)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.375f, 0.0f); // ke ujung bawah lengan
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
+    GLUquadric* handLeft = gluNewQuadric();
+    gluSphere(handLeft, 0.15f, 16, 16);
+    gluDeleteQuadric(handLeft);
+    glPopMatrix();
+
+    glPopMatrix();
+
+    // Lengan Kanan (pivot di bahu)
+    glPushMatrix();
+    glTranslatef(0.5f, 0.7f, 0.0f);
+    glRotatef(-npc2ArmAngle, 1, 0, 0);
+    glTranslatef(0.0f, -0.375f, 0.0f);
+    glColor3f(139.0f/255.0f, 212.0f/255.0f, 91.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Tangan Kanan (sphere di ujung bawah lengan)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.375f, 0.0f);
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
+    GLUquadric* handRight = gluNewQuadric();
+    gluSphere(handRight, 0.15f, 16, 16);
+    gluDeleteQuadric(handRight);
+    glPopMatrix();
+
+    glPopMatrix();
+
+    // Pinggang
+    glPushMatrix();
+    glTranslatef(0.0f, 0.0f, 0.0f);
+    glColor3f(44.0f/255.0f, 69.0f/255.0f, 28.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.75f, 0.3f, 0.3f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    // Kaki Kiri (pivot di pinggang)
+    glPushMatrix();
+    glTranslatef(-0.25f, -0.225f, 0.0f);    // ke posisi pangkal kaki kiri
+    glRotatef(npc2LegAngle, 1, 0, 0);          // rotasi kaki kiri di pangkal
+    glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kiri
+    glColor3f(139.0f/255.0f, 212.0f/255.0f, 91.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+
+    // Telapak Kiri (ikut kaki)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.35f, 0.1f); // ke ujung bawah kaki kiri, lalu sedikit ke depan
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.35f, 0.15f, 0.7f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    //glPopMatrix();
+
+    // Kaki Kanan (pivot di pinggang)
+    glPushMatrix();
+    glTranslatef(0.25f, -0.225f, 0.0f);     // ke posisi pangkal kaki kanan
+    glRotatef(-npc2LegAngle, 1, 0, 0);         // rotasi kaki kanan di pangkal
+    glTranslatef(0.0f, -0.25f, 0.0f);     // ke tengah kaki kanan
+    glColor3f(139.0f/255.0f, 212.0f/255.0f, 91.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.25f, 0.75f, 0.25f);
+    drawCube(1.0f);
+    glPopMatrix();
+
+    // Telapak Kanan (ikut kaki)
+    glPushMatrix();
+    glTranslatef(0.0f, -0.35f, 0.1f);
+    glColor3f(28.0f/255.0f, 28.0f/255.0f, 28.0f/255.0f);
+    glPushMatrix();
+    glScalef(0.35f, 0.15f, 0.7f);
+    drawCube(1.0f);
+    glPopMatrix();
+    glPopMatrix();
+
+    glPopMatrix();
+
+}
+
+*/
 //TEXT
 #define WIDTH 800
 #define HEIGHT 600
@@ -1017,7 +1238,6 @@ const unsigned char digitFont[10][8] = {
 
 // Fungsi untuk menampilkan angka besar vertikal (hanya angka)
 void drawBigNumber(float x, float y, const std::string& num, float scale = 6.0f) {
-    // Hapus glDisable(GL_LIGHTING); dan glEnable(GL_LIGHTING); dari sini!
     float charWidth = 8 * scale;
     float charHeight = 8 * scale;
     glPushMatrix();
@@ -1046,42 +1266,110 @@ void drawBigNumber(float x, float y, const std::string& num, float scale = 6.0f)
     glPopMatrix();
 }
 
-
-void drawText(float x, float y, const std::string& text) {
+void drawBigText(float x, float y, const std::string& text, float scale = 12.0f) {
+    float charWidth = 6 * scale;
+    float charHeight = 8 * scale;
     glPushMatrix();
-    glRasterPos2f(x, y);  // Tentukan posisi awal teks
-
+    glTranslatef(x, y, 0);
+    glDisable(GL_TEXTURE_2D);
     for (size_t i = 0; i < text.length(); i++) {
-        unsigned char character = text[i];
-        if (character >= 32 && character <= 127) {
-            // Ambil font berdasarkan indeks ASCII
-            const unsigned char* charBitmap = font[character - 32];
-            glBitmap(8, 16, 0, 0, 0, 0, charBitmap);  // Gambar karakter
+        char c = text[i];
+        if (c >= 'A' && c <= 'Z') {
+            const unsigned char* bitmap = font[c - 'A'];
+            for (int col = 0; col < 5; ++col) {
+                unsigned char bits = bitmap[col];
+                for (int row = 0; row < 7; ++row) {
+                    if (bits & (1 << row)) {
+                        glBegin(GL_QUADS);
+                        glVertex2f(i * charWidth + col * scale, -row * scale);
+                        glVertex2f(i * charWidth + (col + 1) * scale, -row * scale);
+                        glVertex2f(i * charWidth + (col + 1) * scale, -(row + 1) * scale);
+                        glVertex2f(i * charWidth + col * scale, -(row + 1) * scale);
+                        glEnd();
+                    }
+                }
+            }
+        } else if (c >= '0' && c <= '9') {
+            const unsigned char* bitmap = digitFont[c - '0'];
+            for (int row = 0; row < 8; ++row) {
+                unsigned char bits = bitmap[row];
+                for (int col = 0; col < 8; ++col) {
+                    if (bits & (1 << (7 - col))) {
+                        glBegin(GL_QUADS);
+                        glVertex2f(i * charWidth + col * scale, -row * scale);
+                        glVertex2f(i * charWidth + (col + 1) * scale, -row * scale);
+                        glVertex2f(i * charWidth + (col + 1) * scale, -(row + 1) * scale);
+                        glVertex2f(i * charWidth + col * scale, -(row + 1) * scale);
+                        glEnd();
+                    }
+                }
+            }
         }
     }
-
+    glEnable(GL_TEXTURE_2D);
     glPopMatrix();
 }
 
 
 void renderGameOver() {
     if (gameOver) {
-        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);  // Mengubah latar belakang menjadi merah
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);  // Membersihkan layar dengan warna merah
+        glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glColor3f(1.0f, 1.0f, 1.0f);  // Warna putih untuk teks
-
-        // Tentukan posisi teks di tengah layar
-        glRasterPos2f(-0.3f, 0.0f);
-
-        // Tampilkan teks "Game Over!"
-        drawText(-0.3f, 0.0f, "Game Over!");
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        gluOrtho2D(0, WIDTH, 0, HEIGHT);
+        glMatrixMode(GL_MODELVIEW);
+        glPushMatrix();
+        glLoadIdentity();
+        glDisable(GL_LIGHTING);
+        glColor3f(1,1,1);
+        // Tampilkan teks besar di tengah layar
+        drawBigText(WIDTH/2 - 180, HEIGHT/2 + 40, "GAME OVER", 6.0f);
+        glEnable(GL_LIGHTING);
+        glPopMatrix();
+        glMatrixMode(GL_PROJECTION);
+        glPopMatrix();
+        glMatrixMode(GL_MODELVIEW);
     }
 }
 
 
+void resetGame() {
+    posXBadan = 0.0f;
+    posYBadan = 1.0f;
+    posZBadan = 0.0f;
+    rotAngleY = 0.0f;
+    armAngle = 0.0f;
+    legAngle = 0.0f;
+    walkTime = 0.0f;
+    walking = false;
+    
+    npcX = 20.0f;
+    npcY = 2.0f;
+    npcZ = 20.0f;
+    npcWalkTime = 0.0f;
+    npcArmAngle = 0.0f;
+    npcLegAngle = 0.0f;
+    
+    //npc2X = 10.0f;
+    //npc2Y = 2.0f;
+    //npc2Z = 10.0f;
+    //npc2WalkTime = 0.0f;
+    //npc2ArmAngle = 0.0f;
+    //npc2LegAngle = 0.0f;
 
-
+    supplies.clear();
+    carryingSupply = false;
+    firstSupplySpawned = false;
+    keyPressedE = false;
+    score = 0;
+    generateBuildings(30);
+    spawnZone();
+    spawnSupply();
+    gameOver = false;
+}
 
 //MAIN
 
@@ -1089,7 +1377,7 @@ int main() {
     double lastTime = glfwGetTime();
     generateBuildings(30);
     spawnZone();
-    spawnSupply();  // Spawn supply pertama kali
+    spawnSupply();
     if (!glfwInit()) return -1;
 
     GLFWwindow* window = glfwCreateWindow(800, 600, "Simple Player & Camera", NULL, NULL);
@@ -1101,7 +1389,7 @@ int main() {
     glfwMakeContextCurrent(window);
     glewInit();
 
-        init();  // Inisialisasi OpenGL (lighting, quadric, dsb.)
+        init();
     glEnable(GL_TEXTURE_2D);
     
 
@@ -1120,11 +1408,12 @@ int main() {
         std::exit(EXIT_FAILURE);
     }
 
-    skyTexture = loadTexture("textures/sky3.png");  // Pastikan ada file sky.jpg
+    skyTexture = loadTexture("textures/sky3.png");
     buildingTexture = loadTexture("textures/buildingtext.png");
+    supplyTexture = loadTexture("textures/supply.png");
 
     glfwSetFramebufferSizeCallback(window, reshape);
-    reshape(window, WIDTH, HEIGHT);  // Set viewport awal
+    reshape(window, WIDTH, HEIGHT);
 
     // Loop utama
     while (!glfwWindowShouldClose(window)) {
@@ -1146,6 +1435,14 @@ int main() {
         renderSky();     
         renderGround();
         drawBuildings();
+        for (auto& s : supplies) {
+            if (s.active && !carryingSupply) {
+                if (s.y > 0.5f) { // Target ketinggian tanah, misal 0.5
+                    s.y -= 0.01f;  // Kecepatan turun, bisa disesuaikan
+                    if (s.y < 0.5f) s.y = 0.5f;
+                }
+            }
+        }
         drawSupply();
         
         if (
@@ -1194,7 +1491,15 @@ int main() {
         
 
         renderGameOver();  // Menampilkan teks Game Over jika gameOver == true
-
+        static bool spacePressed = false;
+        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS) {
+            if (!spacePressed) {
+                resetGame();
+                spacePressed = true;
+            }
+        } else {
+            spacePressed = false;
+        }
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
